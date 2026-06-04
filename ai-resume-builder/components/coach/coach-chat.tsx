@@ -2,6 +2,7 @@
 
 import * as React from "react"
 
+import { parseApiResponse } from "@/lib/api/parse-response"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -13,50 +14,78 @@ export function CoachChat({ initialThreadId }: { initialThreadId?: string }) {
   const [messages, setMessages] = React.useState<Message[]>([])
   const [input, setInput] = React.useState("")
   const [loading, setLoading] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     if (!threadId) return
-    fetch(`/api/coach/threads/${threadId}/messages`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.thread?.messages) setMessages(data.thread.messages)
+    fetch(`/api/coach/threads/${threadId}/messages`, { credentials: "include" })
+      .then((res) => parseApiResponse<{ thread?: { messages: Message[] } }>(res))
+      .then((parsed) => {
+        if (parsed.ok && parsed.data.thread?.messages) {
+          setMessages(parsed.data.thread.messages)
+        } else if (!parsed.ok) {
+          setError(parsed.error)
+        }
       })
+      .catch(() => setError("Could not load conversation."))
   }, [threadId])
 
   async function ensureThread() {
     if (threadId) return threadId
     const res = await fetch("/api/coach/threads", {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: "Career coaching" }),
     })
-    const data = await res.json()
-    setThreadId(data.thread.id)
-    return data.thread.id as string
+    const parsed = await parseApiResponse<{ thread: { id: string } }>(res)
+    if (!parsed.ok) {
+      throw new Error(parsed.error)
+    }
+    setThreadId(parsed.data.thread.id)
+    return parsed.data.thread.id
   }
 
   async function sendMessage(e: React.FormEvent) {
     e.preventDefault()
     if (!input.trim()) return
     setLoading(true)
-    const id = await ensureThread()
-    const userMessage: Message = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: input,
-    }
-    setMessages((prev) => [...prev, userMessage])
-    setInput("")
+    setError(null)
 
-    const res = await fetch(`/api/coach/threads/${id}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: userMessage.content }),
-    })
-    const data = await res.json()
-    setLoading(false)
-    if (res.ok) {
-      setMessages((prev) => [...prev, data.message])
+    try {
+      const id = await ensureThread()
+      const userMessage: Message = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: input.trim(),
+      }
+      setMessages((prev) => [...prev, userMessage])
+      setInput("")
+
+      const res = await fetch(`/api/coach/threads/${id}/messages`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: userMessage.content }),
+      })
+      const parsed = await parseApiResponse<{
+        message: Message
+        usedFallback?: boolean
+      }>(res)
+      setLoading(false)
+
+      if (!parsed.ok) {
+        setError(parsed.error)
+        return
+      }
+
+      setMessages((prev) => [...prev, parsed.data.message])
+      if (parsed.data.usedFallback) {
+        setError(null)
+      }
+    } catch (err) {
+      setLoading(false)
+      setError(err instanceof Error ? err.message : "Could not send message.")
     }
   }
 
@@ -68,6 +97,12 @@ export function CoachChat({ initialThreadId }: { initialThreadId?: string }) {
           Resume reviews, career paths, certifications, and interview prep.
         </p>
       </div>
+
+      {error ? (
+        <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
 
       <Card className="flex min-h-[480px] flex-1 flex-col">
         <CardContent className="flex flex-1 flex-col gap-3 p-4">

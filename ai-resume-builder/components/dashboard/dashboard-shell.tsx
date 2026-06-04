@@ -23,6 +23,7 @@ import {
 const titles: Record<string, string> = {
   "/dashboard": "Command Center",
   "/dashboard/resumes": "Resume Builder",
+  "/dashboard/resumes/new": "Create Resume",
   "/dashboard/ats": "ATS Intelligence",
   "/dashboard/job-match": "Job Match Engine",
   "/dashboard/cover-letters": "Cover Letters",

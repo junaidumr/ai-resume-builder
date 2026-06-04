@@ -3,6 +3,7 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 
+import { parseApiResponse } from "@/lib/api/parse-response"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -33,32 +34,62 @@ export function ApplicationTracker({
   const [title, setTitle] = React.useState("")
   const [description, setDescription] = React.useState("")
   const [loading, setLoading] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+
+  async function refreshList() {
+    const listRes = await fetch("/api/applications", { credentials: "include" })
+    const listParsed = await parseApiResponse<{ applications: Application[] }>(listRes)
+    if (listParsed.ok) setApplications(listParsed.data.applications)
+  }
 
   async function createApplication() {
+    if (!company.trim() || !title.trim()) {
+      setError("Company and role are required.")
+      return
+    }
     setLoading(true)
-    const res = await fetch("/api/applications", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ company, title, description, status: "APPLIED" }),
-    })
-    setLoading(false)
-    if (res.ok) {
+    setError(null)
+    try {
+      const res = await fetch("/api/applications", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company: company.trim(),
+          title: title.trim(),
+          description: description.trim() || undefined,
+          status: "APPLIED",
+        }),
+      })
+      const parsed = await parseApiResponse(res)
+      setLoading(false)
+      if (!parsed.ok) {
+        setError(parsed.error)
+        return
+      }
       setCompany("")
       setTitle("")
       setDescription("")
-      const listRes = await fetch("/api/applications")
-      const listData = await listRes.json()
-      if (listRes.ok) setApplications(listData.applications)
+      await refreshList()
       router.refresh()
+    } catch {
+      setLoading(false)
+      setError("Could not add application.")
     }
   }
 
   async function updateStatus(id: string, status: string) {
-    await fetch(`/api/applications/${id}`, {
+    const res = await fetch(`/api/applications/${id}`, {
       method: "PATCH",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     })
+    const parsed = await parseApiResponse(res)
+    if (!parsed.ok) {
+      setError(parsed.error)
+      return
+    }
     setApplications((prev) =>
       prev.map((app) => (app.id === id ? { ...app, status } : app))
     )
@@ -66,7 +97,16 @@ export function ApplicationTracker({
   }
 
   async function remove(id: string) {
-    await fetch(`/api/applications/${id}`, { method: "DELETE" })
+    if (!confirm("Remove this application?")) return
+    const res = await fetch(`/api/applications/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    })
+    const parsed = await parseApiResponse(res)
+    if (!parsed.ok) {
+      setError(parsed.error)
+      return
+    }
     setApplications((prev) => prev.filter((app) => app.id !== id))
     router.refresh()
   }
@@ -79,6 +119,12 @@ export function ApplicationTracker({
           Track applications, statuses, and follow-up momentum.
         </p>
       </div>
+
+      {error ? (
+        <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -97,7 +143,11 @@ export function ApplicationTracker({
             <Label>Notes / job description</Label>
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
-          <Button onClick={createApplication} disabled={loading || !company || !title}>
+          <Button
+            type="button"
+            onClick={createApplication}
+            disabled={loading || !company.trim() || !title.trim()}
+          >
             {loading ? "Saving..." : "Add application"}
           </Button>
         </CardContent>
@@ -132,7 +182,12 @@ export function ApplicationTracker({
                       </option>
                     ))}
                   </Select>
-                  <Button variant="ghost" size="sm" onClick={() => remove(app.id)}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => remove(app.id)}
+                  >
                     Delete
                   </Button>
                 </div>
