@@ -1,5 +1,6 @@
 import Link from "next/link"
 
+import { VersionRestoreButton } from "@/components/versions/version-restore-button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { requireUser } from "@/lib/auth/session"
@@ -45,6 +46,11 @@ export default async function VersionsPage() {
                 {version.changeSummary ? (
                   <p className="mt-1">{version.changeSummary}</p>
                 ) : null}
+                <VersionRestoreButton
+                  resumeId={version.resume.id}
+                  versionId={version.id}
+                  versionNumber={version.version}
+                />
               </CardContent>
             </Card>
           ))

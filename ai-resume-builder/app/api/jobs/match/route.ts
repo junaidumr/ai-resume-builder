@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { requireApiUser } from "@/lib/auth/api"
+import { buildFallbackJobMatch } from "@/lib/ai/fallbacks"
 import { generateStructuredJson } from "@/lib/ai/openai-json"
 import { buildJobMatchPrompt, jobMatchRequestSchema } from "@/lib/ai/prompts"
 import { prisma } from "@/lib/db/prisma"
@@ -18,22 +19,24 @@ export async function POST(request: Request) {
     )
   }
 
-  if (!process.env.OPENAI_API_KEY) {
-    return NextResponse.json(
-      { error: "OPENAI_API_KEY is required for semantic job matching" },
-      { status: 503 }
-    )
-  }
+  let result = buildFallbackJobMatch(parsed.data)
+  let usedFallback = true
 
-  const aiResult = await generateStructuredJson({
-    system:
-      "Analyze resume vs job description. Return JSON with matchPercentage, extractedSkills, missingKeywords, weakAreas, rewriteSuggestions.",
-    user: buildJobMatchPrompt(parsed.data),
-  })
-
-  const validated = jobMatchResultSchema.safeParse(aiResult)
-  if (!validated.success) {
-    return NextResponse.json({ error: "Invalid match result" }, { status: 502 })
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      const aiResult = await generateStructuredJson({
+        system:
+          "Analyze resume vs job description. Return JSON with matchPercentage, extractedSkills, missingKeywords, weakAreas, rewriteSuggestions.",
+        user: buildJobMatchPrompt(parsed.data),
+      })
+      const fromAi = jobMatchResultSchema.safeParse(aiResult)
+      if (fromAi.success) {
+        result = fromAi.data
+        usedFallback = false
+      }
+    } catch {
+      // use fallback
+    }
   }
 
   if (parsed.data.resumeId) {
@@ -46,14 +49,14 @@ export async function POST(request: Request) {
         data: {
           resumeId: resume.id,
           jobDescription: parsed.data.jobDescription,
-          score: validated.data.matchPercentage,
-          matchPercentage: validated.data.matchPercentage,
-          missingKeywords: validated.data.missingKeywords,
-          suggestions: validated.data.rewriteSuggestions,
+          score: result.matchPercentage,
+          matchPercentage: result.matchPercentage,
+          missingKeywords: result.missingKeywords,
+          suggestions: result.rewriteSuggestions,
         },
       })
     }
   }
 
-  return NextResponse.json({ result: validated.data })
+  return NextResponse.json({ result, usedFallback })
 }

@@ -8,22 +8,30 @@ import { emptyResumeContent } from "@/lib/types/resume-defaults"
 
 export default async function ResumeDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ version?: string }>
 }) {
   const user = await requireUser()
   const { id } = await params
+  const { version: versionParam } = await searchParams
+  const versionNumber = versionParam ? Number.parseInt(versionParam, 10) : undefined
 
   const resume = await prisma.resume.findFirst({
     where: { id, ownerId: user.id },
-    include: { versions: { orderBy: { version: "desc" }, take: 1 } },
+    include: { versions: { orderBy: { version: "desc" } } },
   })
 
   if (!resume) notFound()
 
-  const latest = resume.versions[0]
-  const content = latest
-    ? resumeContentSchema.safeParse(latest.content).data ?? emptyResumeContent()
+  const selected =
+    versionNumber && !Number.isNaN(versionNumber)
+      ? resume.versions.find((v) => v.version === versionNumber)
+      : resume.versions[0]
+
+  const content = selected
+    ? resumeContentSchema.safeParse(selected.content).data ?? emptyResumeContent()
     : emptyResumeContent()
 
   return (
@@ -32,6 +40,8 @@ export default async function ResumeDetailPage({
       initialTitle={resume.title}
       initialTargetRole={resume.targetRole}
       initialContent={content}
+      viewingVersion={selected?.version}
+      viewingVersionLabel={selected?.label}
     />
   )
 }

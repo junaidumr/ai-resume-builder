@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 
 import { requireApiUser } from "@/lib/auth/api"
+import { buildFallbackAts } from "@/lib/ai/fallbacks"
 import { generateStructuredJson } from "@/lib/ai/openai-json"
 import { prisma } from "@/lib/db/prisma"
 import { aiResumeResultSchema, resumeContentSchema, resumeToText } from "@/lib/types/resume"
@@ -16,13 +17,6 @@ export async function POST(
 ) {
   const { user, error } = await requireApiUser()
   if (error) return error
-
-  if (!process.env.OPENAI_API_KEY) {
-    return NextResponse.json(
-      { error: "OPENAI_API_KEY is required" },
-      { status: 503 }
-    )
-  }
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})))
   if (!parsed.success) {
@@ -42,34 +36,43 @@ export async function POST(
   const content = resumeContentSchema.parse(resume.versions[0].content)
   const resumeText = resumeToText(content)
 
-  const aiResult = await generateStructuredJson({
-    system:
-      "You are an ATS scanner. Return JSON with summary, experienceBullets, skills, missingKeywords, atsScore (0-100), suggestions (string array).",
-    user: JSON.stringify({
-      resumeText,
-      jobDescription: parsed.data.jobDescription ?? "",
-    }),
-  })
+  let result = buildFallbackAts(resumeText, parsed.data.jobDescription)
+  let usedFallback = true
 
-  const validated = aiResumeResultSchema.safeParse(aiResult)
-  if (!validated.success) {
-    return NextResponse.json({ error: "Invalid ATS analysis" }, { status: 502 })
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      const aiResult = await generateStructuredJson({
+        system:
+          "You are an ATS scanner. Return JSON with summary, experienceBullets, skills, missingKeywords, atsScore (0-100), suggestions (string array).",
+        user: JSON.stringify({
+          resumeText,
+          jobDescription: parsed.data.jobDescription ?? "",
+        }),
+      })
+      const fromAi = aiResumeResultSchema.safeParse(aiResult)
+      if (fromAi.success) {
+        result = fromAi.data
+        usedFallback = false
+      }
+    } catch {
+      // use fallback
+    }
   }
 
   const analysis = await prisma.atsAnalysis.create({
     data: {
       resumeId: resume.id,
       jobDescription: parsed.data.jobDescription,
-      score: validated.data.atsScore,
-      missingKeywords: validated.data.missingKeywords,
-      suggestions: validated.data.suggestions,
+      score: result.atsScore,
+      missingKeywords: result.missingKeywords,
+      suggestions: result.suggestions,
     },
   })
 
   await prisma.resumeVersion.update({
     where: { id: resume.versions[0].id },
-    data: { atsScore: validated.data.atsScore },
+    data: { atsScore: result.atsScore },
   })
 
-  return NextResponse.json({ analysis, result: validated.data })
+  return NextResponse.json({ analysis, result, usedFallback })
 }

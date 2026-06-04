@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { requireApiUser } from "@/lib/auth/api"
-import { buildFallbackResume } from "@/lib/ai/build-fallback-resume"
+import { buildFallbackResume } from "@/lib/ai/fallbacks"
 import { generateStructuredJson } from "@/lib/ai/openai-json"
 import {
   buildResumeSystemPrompt,

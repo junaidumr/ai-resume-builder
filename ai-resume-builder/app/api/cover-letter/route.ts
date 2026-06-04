@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 
 import { requireApiUser } from "@/lib/auth/api"
+import { buildFallbackCoverLetter } from "@/lib/ai/fallbacks"
 import { getOpenAIClient } from "@/lib/ai/prompts"
 import { coverLetterRequestSchema } from "@/lib/ai/prompts"
 import { prisma } from "@/lib/db/prisma"
@@ -22,23 +23,28 @@ export async function POST(request: Request) {
     )
   }
 
-  if (!process.env.OPENAI_API_KEY) {
-    return NextResponse.json(
-      { error: "OPENAI_API_KEY is required for cover letter generation" },
-      { status: 503 }
-    )
+  let letter = buildFallbackCoverLetter(parsed.data)
+  let usedFallback = true
+
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      const completion = await getOpenAIClient().responses.create({
+        model: process.env.OPENAI_MODEL ?? "gpt-4.1",
+        input: [
+          "Write a tailored cover letter using the requested tone.",
+          "Keep it specific, concise, editable, and aligned with the job description.",
+          JSON.stringify(parsed.data),
+        ].join("\n\n"),
+      })
+      const text = completion.output_text?.trim()
+      if (text) {
+        letter = text
+        usedFallback = false
+      }
+    } catch {
+      // use fallback
+    }
   }
-
-  const completion = await getOpenAIClient().responses.create({
-    model: process.env.OPENAI_MODEL ?? "gpt-4.1",
-    input: [
-      "Write a tailored cover letter using the requested tone.",
-      "Keep it specific, concise, editable, and aligned with the job description.",
-      JSON.stringify(parsed.data),
-    ].join("\n\n"),
-  })
-
-  const letter = completion.output_text?.trim() ?? ""
 
   if (parsed.data.resumeId) {
     await prisma.uploadedFile.create({
@@ -53,5 +59,5 @@ export async function POST(request: Request) {
     })
   }
 
-  return NextResponse.json({ letter })
+  return NextResponse.json({ letter, usedFallback })
 }

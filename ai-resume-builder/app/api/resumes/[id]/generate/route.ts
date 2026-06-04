@@ -2,6 +2,11 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 
 import { requireApiUser } from "@/lib/auth/api"
+import {
+  buildFallbackResume,
+  buildGenerateInput,
+  ensureRawExperience,
+} from "@/lib/ai/fallbacks"
 import { generateStructuredJson } from "@/lib/ai/openai-json"
 import { buildResumeSystemPrompt } from "@/lib/ai/prompts"
 import { prisma } from "@/lib/db/prisma"
@@ -14,9 +19,9 @@ import {
 
 const bodySchema = z.object({
   targetRole: z.string().min(2),
-  seniority: z.string().min(2),
-  industry: z.string().min(2),
-  rawExperience: z.string().min(20),
+  seniority: z.string().min(2).optional(),
+  industry: z.string().min(2).optional(),
+  rawExperience: z.string().optional(),
   jobDescription: z.string().optional(),
 })
 
@@ -26,13 +31,6 @@ export async function POST(
 ) {
   const { user, error } = await requireApiUser()
   if (error) return error
-
-  if (!process.env.OPENAI_API_KEY) {
-    return NextResponse.json(
-      { error: "OPENAI_API_KEY is required" },
-      { status: 503 }
-    )
-  }
 
   const parsed = bodySchema.safeParse(await request.json())
   if (!parsed.success) {
@@ -52,17 +50,35 @@ export async function POST(
     return NextResponse.json({ error: "Resume not found" }, { status: 404 })
   }
 
-  const aiResult = await generateStructuredJson({
-    system: buildResumeSystemPrompt(),
-    user: JSON.stringify(parsed.data),
-  })
+  const genInput = buildGenerateInput(parsed.data.targetRole, "", [])
+  const requestPayload = {
+    targetRole: parsed.data.targetRole,
+    seniority: parsed.data.seniority ?? genInput.seniority,
+    industry: parsed.data.industry ?? genInput.industry,
+    rawExperience: ensureRawExperience(
+      parsed.data.rawExperience ?? "",
+      parsed.data.targetRole
+    ),
+    jobDescription: parsed.data.jobDescription,
+  }
 
-  const validated = aiResumeResultSchema.safeParse(aiResult)
-  if (!validated.success) {
-    return NextResponse.json(
-      { error: "AI returned invalid resume structure" },
-      { status: 502 }
-    )
+  let result = buildFallbackResume(requestPayload)
+  let usedFallback = true
+
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      const aiResult = await generateStructuredJson({
+        system: buildResumeSystemPrompt(),
+        user: JSON.stringify(requestPayload),
+      })
+      const fromAi = aiResumeResultSchema.safeParse(aiResult)
+      if (fromAi.success) {
+        result = fromAi.data
+        usedFallback = false
+      }
+    } catch {
+      // use fallback
+    }
   }
 
   const latest = resume.versions[0]
@@ -80,20 +96,20 @@ export async function POST(
 
   const updatedContent: ResumeContent = {
     ...currentContent,
-    summary: validated.data.summary,
-    skills: validated.data.skills,
+    summary: result.summary,
+    skills: result.skills,
     experience:
       currentContent.experience.length > 0
         ? currentContent.experience.map((exp, index) =>
             index === 0
-              ? { ...exp, bullets: validated.data.experienceBullets }
+              ? { ...exp, bullets: result.experienceBullets }
               : exp
           )
         : [
             {
               company: "Recent Role",
               title: parsed.data.targetRole,
-              bullets: validated.data.experienceBullets,
+              bullets: result.experienceBullets,
             },
           ],
   }
@@ -104,11 +120,15 @@ export async function POST(
     data: {
       resumeId: resume.id,
       version: nextVersion,
-      label: `AI generated v${nextVersion}`,
+      label: usedFallback
+        ? `Draft improve v${nextVersion}`
+        : `AI generated v${nextVersion}`,
       template: latest?.template ?? "ATS Minimal",
       content: updatedContent,
-      atsScore: validated.data.atsScore,
-      changeSummary: "AI resume rewrite and ATS optimization",
+      atsScore: result.atsScore,
+      changeSummary: usedFallback
+        ? "Local AI draft improvement"
+        : "AI resume rewrite and ATS optimization",
     },
   })
 
@@ -116,9 +136,9 @@ export async function POST(
     data: {
       resumeId: resume.id,
       jobDescription: parsed.data.jobDescription,
-      score: validated.data.atsScore,
-      missingKeywords: validated.data.missingKeywords,
-      suggestions: validated.data.suggestions,
+      score: result.atsScore,
+      missingKeywords: result.missingKeywords,
+      suggestions: result.suggestions,
     },
   })
 
@@ -129,7 +149,9 @@ export async function POST(
 
   return NextResponse.json({
     version,
-    analysis: validated.data,
+    analysis: result,
     resumeText: resumeToText(updatedContent),
+    usedFallback,
+    content: updatedContent,
   })
 }

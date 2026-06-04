@@ -1,5 +1,6 @@
 import Link from "next/link"
 
+import { ResumeCardActions } from "@/components/resumes/resume-card-actions"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { requireUser } from "@/lib/auth/session"
@@ -33,8 +34,13 @@ export default async function ResumesPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {resumes.length === 0 ? (
           <Card className="md:col-span-2 xl:col-span-3">
-            <CardContent className="p-6 text-sm text-muted-foreground">
-              No resumes yet. Create your first resume to get started.
+            <CardContent className="flex flex-col gap-3 p-6">
+              <p className="text-sm text-muted-foreground">
+                No resumes yet. Create your first resume to get started.
+              </p>
+              <Button asChild className="w-fit">
+                <Link href="/dashboard/resumes/new">Create resume</Link>
+              </Button>
             </CardContent>
           </Card>
         ) : (
@@ -54,6 +60,7 @@ export default async function ResumesPage() {
                 <Button asChild variant="outline" className="w-full">
                   <Link href={`/dashboard/resumes/${resume.id}`}>Open editor</Link>
                 </Button>
+                <ResumeCardActions resumeId={resume.id} />
               </CardContent>
             </Card>
           ))
