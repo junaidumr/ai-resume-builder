@@ -5,7 +5,13 @@ import { requireApiUser } from "@/lib/auth/api"
 import { buildFallbackAts } from "@/lib/ai/fallbacks"
 import { generateStructuredJson } from "@/lib/ai/openai-json"
 import { prisma } from "@/lib/db/prisma"
-import { aiResumeResultSchema, resumeContentSchema, resumeToText } from "@/lib/types/resume"
+import {
+  aiResumeResultSchema,
+  resumeContentSchema,
+  resumeToText,
+} from "@/lib/types/resume"
+
+type AiResumeResult = z.infer<typeof aiResumeResultSchema>
 
 const bodySchema = z.object({
   jobDescription: z.string().optional(),
@@ -36,7 +42,7 @@ export async function POST(
   const content = resumeContentSchema.parse(resume.versions[0].content)
   const resumeText = resumeToText(content)
 
-  let result = buildFallbackAts(resumeText, parsed.data.jobDescription)
+  let result: AiResumeResult = buildFallbackAts(resumeText, parsed.data.jobDescription)
   let usedFallback = true
 
   if (process.env.OPENAI_API_KEY) {

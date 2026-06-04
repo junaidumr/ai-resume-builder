@@ -1,6 +1,5 @@
 import { PrismaAdapter } from "@next-auth/prisma-adapter"
 import type { NextAuthOptions } from "next-auth"
-import type { Provider } from "next-auth/providers"
 import GoogleProvider from "next-auth/providers/google"
 import LinkedInProvider from "next-auth/providers/linkedin"
 
@@ -9,7 +8,7 @@ import { prisma } from "@/lib/db/prisma"
 const useSecureCookies =
   process.env.NEXTAUTH_URL?.startsWith("https://") ?? false
 
-const providers: Provider[] = [
+const providers: NextAuthOptions["providers"] = [
   GoogleProvider({
     clientId: process.env.GOOGLE_CLIENT_ID ?? "",
     clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",

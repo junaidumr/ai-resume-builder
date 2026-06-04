@@ -4,13 +4,11 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 
 import { parseApiResponse } from "@/lib/api/parse-response"
+import { ensureRawExperience } from "@/lib/ai/fallbacks"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-
-const DEFAULT_EXPERIENCE =
-  "Built scalable web applications, collaborated with cross-functional teams, and improved delivery quality."
 
 type CreateResumeResponse = { resume: { id: string } }
 type AiResumeResponse = {
@@ -94,7 +92,7 @@ export default function NewResumePage() {
           targetRole: role,
           seniority: "Mid",
           industry: "Technology",
-          rawExperience: summary.trim() || DEFAULT_EXPERIENCE,
+          rawExperience: ensureRawExperience(summary.trim(), role),
         }),
       })
 
@@ -155,7 +153,7 @@ export default function NewResumePage() {
           id="summary"
           value={summary}
           onChange={(e) => setSummary(e.target.value)}
-          placeholder="Paste experience, projects, and achievements for AI generation."
+          placeholder="Optional: skills, projects, or bullets (e.g. HTML, CSS, React). Short notes work — we build a full draft."
         />
       </div>
 

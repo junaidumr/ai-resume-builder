@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { requireApiUser } from "@/lib/auth/api"
-import { buildFallbackResume } from "@/lib/ai/fallbacks"
+import { buildFallbackResume, ensureRawExperience } from "@/lib/ai/fallbacks"
 import { generateStructuredJson } from "@/lib/ai/openai-json"
 import {
   buildResumeSystemPrompt,
@@ -15,10 +15,23 @@ export async function POST(request: Request) {
   const { user, error } = await requireApiUser()
   if (error) return error
 
-  const parsed = resumeRequestSchema.safeParse(await request.json())
+  const body = await request.json()
+  const normalized = {
+    ...body,
+    rawExperience: ensureRawExperience(
+      typeof body?.rawExperience === "string" ? body.rawExperience : "",
+      typeof body?.targetRole === "string" ? body.targetRole : "Software Engineer"
+    ),
+  }
+
+  const parsed = resumeRequestSchema.safeParse(normalized)
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "Invalid resume generation request", issues: parsed.error.flatten() },
+      {
+        error:
+          "Please enter a target role (2+ characters). Short notes like skills are fine — we expand them automatically.",
+        issues: parsed.error.flatten(),
+      },
       { status: 400 }
     )
   }

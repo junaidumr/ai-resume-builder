@@ -1,10 +1,10 @@
-export async function parseApiResponse<T extends { error?: string }>(
+export async function parseApiResponse<T>(
   res: Response
 ): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
   const contentType = res.headers.get("content-type") ?? ""
 
   if (contentType.includes("application/json")) {
-    const data = (await res.json()) as T
+    const data = (await res.json()) as T & { error?: string }
     if (!res.ok) {
       return {
         ok: false,
