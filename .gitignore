@@ -1,0 +1,17 @@
+# Nested Next.js app
+ai-resume-builder/node_modules/
+ai-resume-builder/.next/
+ai-resume-builder/out/
+ai-resume-builder/build/
+ai-resume-builder/coverage/
+ai-resume-builder/*.tsbuildinfo
+
+# Env (keep .env.example)
+**/.env
+**/.env.*
+!**/.env.example
+
+# OS / editor
+.DS_Store
+*.pem
+.cursor/

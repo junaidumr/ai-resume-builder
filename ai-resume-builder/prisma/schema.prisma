@@ -1,0 +1,211 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  JOB_SEEKER
+  RECRUITER
+  ADMIN
+  AI_CAREER_COACH
+}
+
+enum Plan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum ApplicationStatus {
+  APPLIED
+  INTERVIEW
+  SHORTLISTED
+  REJECTED
+  OFFER
+}
+
+enum DocumentType {
+  RESUME
+  COVER_LETTER
+  LINKEDIN_PROFILE
+}
+
+model Organization {
+  id                  String        @id @default(cuid())
+  name                String
+  slug                String        @unique
+  plan                Plan          @default(FREE)
+  stripeCustomerId    String?       @unique
+  stripeSubscriptionId String?      @unique
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  members             User[]
+  resumes             Resume[]
+  jobs                JobApplication[]
+  auditLogs           AuditLog[]
+}
+
+model User {
+  id              String        @id @default(cuid())
+  name            String?
+  email           String        @unique
+  emailVerified   DateTime?
+  image           String?
+  role            Role          @default(JOB_SEEKER)
+  organizationId  String?
+  organization    Organization? @relation(fields: [organizationId], references: [id])
+  accounts        Account[]
+  sessions        Session[]
+  resumes         Resume[]
+  uploadedFiles   UploadedFile[]
+  jobs            JobApplication[]
+  chats           CoachThread[]
+  auditLogs       AuditLog[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?
+  access_token       String?
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?
+  session_state      String?
+  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Resume {
+  id             String          @id @default(cuid())
+  title          String
+  targetRole     String?
+  locale         String          @default("en-US")
+  ownerId        String
+  organizationId String?
+  owner          User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  organization   Organization?   @relation(fields: [organizationId], references: [id])
+  versions       ResumeVersion[]
+  analyses       AtsAnalysis[]
+  jobs           JobApplication[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model ResumeVersion {
+  id             String   @id @default(cuid())
+  resumeId       String
+  version        Int
+  label          String
+  content        Json
+  template       String   @default("ATS Minimal")
+  atsScore       Int      @default(0)
+  changeSummary  String?
+  resume         Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+
+  @@unique([resumeId, version])
+}
+
+model AtsAnalysis {
+  id                  String   @id @default(cuid())
+  resumeId            String
+  jobDescription      String?
+  score               Int
+  matchPercentage     Int?
+  missingKeywords     String[]
+  suggestions         Json
+  semanticMatchVector Json?
+  resume              Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  createdAt           DateTime @default(now())
+}
+
+model JobApplication {
+  id             String            @id @default(cuid())
+  userId         String
+  organizationId String?
+  resumeId       String?
+  company        String
+  title          String
+  description    String?
+  status         ApplicationStatus @default(APPLIED)
+  matchScore     Int?
+  reminderAt     DateTime?
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization?     @relation(fields: [organizationId], references: [id])
+  resume         Resume?           @relation(fields: [resumeId], references: [id])
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+}
+
+model UploadedFile {
+  id          String       @id @default(cuid())
+  userId      String
+  type        DocumentType
+  fileName    String
+  contentType String
+  s3Key       String
+  extracted   Json?
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now())
+}
+
+model CoachThread {
+  id        String         @id @default(cuid())
+  userId    String
+  title     String
+  memory    Json?
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  CoachMessage[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model CoachMessage {
+  id        String      @id @default(cuid())
+  threadId  String
+  role      String
+  content   String
+  metadata  Json?
+  thread    CoachThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now())
+}
+
+model AuditLog {
+  id             String        @id @default(cuid())
+  actorId        String?
+  organizationId String?
+  action         String
+  resource       String
+  metadata       Json?
+  ipAddress      String?
+  actor          User?         @relation(fields: [actorId], references: [id])
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime      @default(now())
+}
