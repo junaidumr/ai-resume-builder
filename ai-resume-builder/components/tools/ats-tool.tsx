@@ -1,7 +1,9 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 
+import { parseApiResponse } from "@/lib/api/parse-response"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
@@ -20,23 +22,60 @@ export function AtsTool({ resumes }: { resumes: ResumeOption[] }) {
     suggestions: string[]
   } | null>(null)
   const [error, setError] = React.useState<string | null>(null)
+  const [notice, setNotice] = React.useState<string | null>(null)
 
   async function runScan() {
-    if (!resumeId) return
-    setLoading(true)
-    setError(null)
-    const res = await fetch(`/api/resumes/${resumeId}/ats`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jobDescription }),
-    })
-    const data = await res.json()
-    setLoading(false)
-    if (!res.ok) {
-      setError(data.error ?? "ATS scan failed")
+    if (!resumeId) {
+      setError("Create a resume first.")
       return
     }
-    setResult(data.result)
+    setLoading(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const res = await fetch(`/api/resumes/${resumeId}/ats`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobDescription }),
+      })
+      const parsed = await parseApiResponse<{
+        error?: string
+        result: {
+          atsScore: number
+          missingKeywords: string[]
+          suggestions: string[]
+        }
+        usedFallback?: boolean
+      }>(res)
+      setLoading(false)
+      if (!parsed.ok) {
+        setError(parsed.error)
+        setResult(null)
+        return
+      }
+      setResult(parsed.data.result)
+      if (parsed.data.usedFallback) {
+        setNotice("Used local keyword heuristics (OpenAI unavailable).")
+      }
+    } catch {
+      setLoading(false)
+      setError("ATS scan failed. Try again.")
+    }
+  }
+
+  if (resumes.length === 0) {
+    return (
+      <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
+        <h1 className="text-2xl font-medium">ATS Intelligence</h1>
+        <p className="text-sm text-muted-foreground">
+          Create a resume first, then run ATS scans here.
+        </p>
+        <Button asChild>
+          <Link href="/dashboard/resumes/new">Create resume</Link>
+        </Button>
+      </div>
+    )
   }
 
   return (
@@ -68,10 +107,11 @@ export function AtsTool({ resumes }: { resumes: ResumeOption[] }) {
               placeholder="Paste a job description for targeted ATS matching."
             />
           </div>
-          <Button onClick={runScan} disabled={loading || !resumeId}>
+          <Button type="button" onClick={runScan} disabled={loading || !resumeId}>
             {loading ? "Scanning..." : "Run ATS scan"}
           </Button>
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          {notice ? <p className="text-sm text-muted-foreground">{notice}</p> : null}
         </div>
 
         <Card>
