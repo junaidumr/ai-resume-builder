@@ -5,61 +5,41 @@ import { usePathname } from "next/navigation"
 import {
   BotIcon,
   BriefcaseBusinessIcon,
-  Building2Icon,
-  ChartNoAxesCombinedIcon,
   FileTextIcon,
+  GaugeIcon,
   HistoryIcon,
-  LockKeyholeIcon,
+  LayoutDashboardIcon,
+  MailIcon,
+  PlusIcon,
   SearchCheckIcon,
   SparklesIcon,
-  UsersIcon,
 } from "lucide-react"
 
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
   SidebarRail,
+  SidebarSeparator,
 } from "@/components/ui/sidebar"
+import { Button } from "@/components/ui/button"
 
-const navMain = [
-  {
-    title: "Workspace",
-    items: [{ title: "Command Center", href: "/dashboard" }],
-  },
-  {
-    title: "AI Resume Suite",
-    items: [
-      { title: "Resume Builder", href: "/dashboard/resumes" },
-      { title: "ATS Intelligence", href: "/dashboard/ats" },
-      { title: "Job Match Engine", href: "/dashboard/job-match" },
-      { title: "Cover Letters", href: "/dashboard/cover-letters" },
-      { title: "Version Control", href: "/dashboard/versions" },
-    ],
-  },
-  {
-    title: "Career OS",
-    items: [
-      { title: "AI Career Coach", href: "/dashboard/coach" },
-      { title: "Application Tracker", href: "/dashboard/applications" },
-    ],
-  },
-]
-
-const disabledItems = [
-  { title: "LinkedIn Optimizer", icon: ChartNoAxesCombinedIcon },
-  { title: "Recruiter Portal", icon: UsersIcon },
-  { title: "Organizations", icon: Building2Icon },
-  { title: "RBAC", icon: LockKeyholeIcon },
-]
+const navItems = [
+  { title: "Command Center", href: "/dashboard", icon: LayoutDashboardIcon },
+  { title: "Resume Builder", href: "/dashboard/resumes", icon: FileTextIcon },
+  { title: "ATS Intelligence", href: "/dashboard/ats", icon: SearchCheckIcon },
+  { title: "Job Match", href: "/dashboard/job-match", icon: GaugeIcon },
+  { title: "Cover Letters", href: "/dashboard/cover-letters", icon: MailIcon },
+  { title: "Versions", href: "/dashboard/versions", icon: HistoryIcon },
+  { title: "Career Coach", href: "/dashboard/coach", icon: BotIcon },
+  { title: "Applications", href: "/dashboard/applications", icon: BriefcaseBusinessIcon },
+] as const
 
 function isActive(pathname: string, href: string) {
   if (href === "/dashboard") return pathname === "/dashboard"
@@ -70,8 +50,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
 
   return (
-    <Sidebar {...props}>
-      <SidebarHeader>
+    <Sidebar variant="inset" {...props}>
+      <SidebarHeader className="border-b border-sidebar-border/60">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
@@ -80,8 +60,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   <SparklesIcon className="size-4" />
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-medium">AI Resume Builder</span>
-                  <span>Career OS</span>
+                  <span className="font-semibold">AI Resume Builder</span>
+                  <span className="text-xs text-sidebar-foreground/70">Career OS</span>
                 </div>
               </Link>
             </SidebarMenuButton>
@@ -90,88 +70,29 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Platform</SidebarGroupLabel>
+          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
           <SidebarMenu>
-            {navMain.map((group) => (
-              <SidebarMenuItem key={group.title}>
-                <SidebarMenuButton className="font-medium pointer-events-none opacity-70">
-                  {group.title}
-                </SidebarMenuButton>
-                <SidebarMenuSub>
-                  {group.items.map((item) => (
-                    <SidebarMenuSubItem key={item.href}>
-                      <SidebarMenuSubButton
-                        asChild
-                        isActive={isActive(pathname, item.href)}
-                      >
-                        <Link href={item.href}>{item.title}</Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                  ))}
-                </SidebarMenuSub>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-        </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Coming soon</SidebarGroupLabel>
-          <SidebarMenu>
-            {disabledItems.map((item) => (
-              <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton className="opacity-50" disabled>
-                  <item.icon />
-                  {item.title}
+            {navItems.map((item) => (
+              <SidebarMenuItem key={item.href}>
+                <SidebarMenuButton asChild isActive={isActive(pathname, item.href)}>
+                  <Link href={item.href}>
+                    <item.icon />
+                    <span>{item.title}</span>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ))}
-          </SidebarMenu>
-        </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Quick access</SidebarGroupLabel>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive(pathname, "/dashboard/resumes")}>
-                <Link href="/dashboard/resumes">
-                  <FileTextIcon />
-                  Builder
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive(pathname, "/dashboard/ats")}>
-                <Link href="/dashboard/ats">
-                  <SearchCheckIcon />
-                  ATS
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive(pathname, "/dashboard/applications")}>
-                <Link href="/dashboard/applications">
-                  <BriefcaseBusinessIcon />
-                  Jobs
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive(pathname, "/dashboard/coach")}>
-                <Link href="/dashboard/coach">
-                  <BotIcon />
-                  Coach
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive(pathname, "/dashboard/versions")}>
-                <Link href="/dashboard/versions">
-                  <HistoryIcon />
-                  Versions
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter className="border-t border-sidebar-border/60 p-2">
+        <Button asChild className="w-full justify-start" size="sm">
+          <Link href="/dashboard/resumes/new">
+            <PlusIcon />
+            New resume
+          </Link>
+        </Button>
+      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   )

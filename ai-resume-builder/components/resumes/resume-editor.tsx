@@ -2,14 +2,21 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
+import { SparklesIcon, GaugeIcon, SaveIcon } from "lucide-react"
 
 import { parseApiResponse } from "@/lib/api/parse-response"
 import { ensureRawExperience } from "@/lib/ai/fallbacks"
+import { PageHeader } from "@/components/dashboard/page-header"
+import { ResumePreview } from "@/components/resumes/resume-preview"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import type { ResumeContent } from "@/lib/types/resume"
+
+const sections = ["Profile", "Summary", "Experience", "Skills", "Education"] as const
 
 export function ResumeEditor({
   resumeId,
@@ -27,6 +34,7 @@ export function ResumeEditor({
   viewingVersionLabel?: string
 }) {
   const router = useRouter()
+  const [activeSection, setActiveSection] = React.useState<(typeof sections)[number]>("Profile")
   const [title, setTitle] = React.useState(initialTitle)
   const [targetRole, setTargetRole] = React.useState(initialTargetRole ?? "")
   const [content, setContent] = React.useState(initialContent)
@@ -62,7 +70,7 @@ export function ResumeEditor({
         return
       }
       setTitle(resolvedTitle)
-      showMessage("Resume saved")
+      showMessage("Resume saved successfully")
       router.refresh()
     } catch {
       showMessage("Failed to save resume", true)
@@ -106,15 +114,10 @@ export function ResumeEditor({
         return
       }
 
-      if (parsed.data.content) {
-        setContent(parsed.data.content)
-      }
-
-      const note = parsed.data.usedFallback
-        ? " (local draft — add OpenAI credits for full AI)"
-        : ""
+      if (parsed.data.content) setContent(parsed.data.content)
+      const note = parsed.data.usedFallback ? " (local draft)" : ""
       showMessage(
-        `Created version ${parsed.data.version?.version ?? ""} · ATS ${parsed.data.version?.atsScore ?? 0}%${note}`
+        `Version ${parsed.data.version?.version ?? ""} created · ATS ${parsed.data.version?.atsScore ?? 0}%${note}`
       )
       router.refresh()
     } catch {
@@ -139,14 +142,13 @@ export function ResumeEditor({
         result?: { atsScore: number }
         usedFallback?: boolean
       }>(res)
-
       if (!parsed.ok) {
         showMessage(parsed.error, true)
         return
       }
-
-      const note = parsed.data.usedFallback ? " (heuristic scan)" : ""
-      showMessage(`ATS score: ${parsed.data.result?.atsScore ?? 0}%${note}`)
+      showMessage(
+        `ATS score: ${parsed.data.result?.atsScore ?? 0}%${parsed.data.usedFallback ? " (heuristic)" : ""}`
+      )
       router.refresh()
     } catch {
       showMessage("ATS scan failed", true)
@@ -156,107 +158,222 @@ export function ResumeEditor({
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-medium">Resume Editor</h1>
-          <p className="text-sm text-muted-foreground">
-            Edit content, generate with AI, and run ATS scans.
+    <div className="flex flex-1 flex-col">
+      <div className="px-4 pt-6 md:px-6">
+        <PageHeader
+          title={title}
+          description="Edit sections, preview your document, and run AI optimization."
+          badge={viewingVersion ? `Viewing v${viewingVersion}` : "Editor"}
+          actions={
+            <>
+              <Button type="button" variant="outline" size="sm" onClick={runAts} disabled={atsRunning}>
+                <GaugeIcon />
+                {atsRunning ? "Scanning..." : "ATS scan"}
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={generateWithAi} disabled={generating}>
+                <SparklesIcon />
+                {generating ? "Improving..." : "AI improve"}
+              </Button>
+              <Button type="button" size="sm" onClick={save} disabled={saving}>
+                <SaveIcon />
+                {saving ? "Saving..." : "Save"}
+              </Button>
+            </>
+          }
+        />
+        {viewingVersionLabel ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {viewingVersionLabel} — save to apply edits to the latest version.
           </p>
-          {viewingVersion ? (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Viewing version {viewingVersion}
-              {viewingVersionLabel ? ` · ${viewingVersionLabel}` : ""}. Save to keep edits on
-              the latest version.
+        ) : null}
+      </div>
+
+      <div className="grid flex-1 gap-6 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)] lg:p-6 lg:pt-4">
+        <div className="flex flex-col gap-4">
+          {message ? (
+            <p
+              className={
+                isError
+                  ? "rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                  : "rounded-lg border bg-muted/40 px-3 py-2 text-sm"
+              }
+            >
+              {message}
             </p>
           ) : null}
+
+          <div className="flex flex-wrap gap-1.5">
+            {sections.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setActiveSection(s)}
+                className={
+                  activeSection === s
+                    ? "rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+                    : "rounded-lg border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+                }
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+
+          <Card className="border-border/80 shadow-sm">
+            <CardContent className="space-y-4 p-4 pt-4">
+              {activeSection === "Profile" && (
+                <>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Document title</Label>
+                      <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Target role</Label>
+                      <Input value={targetRole} onChange={(e) => setTargetRole(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Full name</Label>
+                      <Input
+                        value={content.personal.fullName ?? ""}
+                        onChange={(e) =>
+                          setContent({
+                            ...content,
+                            personal: { ...content.personal, fullName: e.target.value },
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Email</Label>
+                      <Input
+                        value={content.personal.email ?? ""}
+                        onChange={(e) =>
+                          setContent({
+                            ...content,
+                            personal: { ...content.personal, email: e.target.value },
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Phone</Label>
+                      <Input
+                        value={content.personal.phone ?? ""}
+                        onChange={(e) =>
+                          setContent({
+                            ...content,
+                            personal: { ...content.personal, phone: e.target.value },
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Location</Label>
+                      <Input
+                        value={content.personal.location ?? ""}
+                        onChange={(e) =>
+                          setContent({
+                            ...content,
+                            personal: { ...content.personal, location: e.target.value },
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {activeSection === "Summary" && (
+                <div className="space-y-2">
+                  <Label>Professional summary</Label>
+                  <Textarea
+                    className="min-h-32"
+                    value={content.summary ?? ""}
+                    onChange={(e) => setContent({ ...content, summary: e.target.value })}
+                  />
+                </div>
+              )}
+
+              {activeSection === "Experience" && (
+                <div className="space-y-2">
+                  <Label>Experience bullets (one per line)</Label>
+                  <Textarea
+                    className="min-h-40"
+                    value={content.experience[0]?.bullets.join("\n") ?? ""}
+                    onChange={(e) =>
+                      setContent({
+                        ...content,
+                        experience: [
+                          {
+                            company: content.experience[0]?.company ?? "Company",
+                            title: content.experience[0]?.title ?? (targetRole || "Role"),
+                            bullets: e.target.value.split("\n").filter(Boolean),
+                          },
+                        ],
+                      })
+                    }
+                  />
+                </div>
+              )}
+
+              {activeSection === "Skills" && (
+                <div className="space-y-2">
+                  <Label>Skills (comma separated)</Label>
+                  <Input
+                    value={content.skills.join(", ")}
+                    onChange={(e) =>
+                      setContent({
+                        ...content,
+                        skills: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                      })
+                    }
+                  />
+                </div>
+              )}
+
+              {activeSection === "Education" && (
+                <div className="space-y-2">
+                  <Label>School · degree · year (one line: MIT | B.S. CS | 2022)</Label>
+                  <Textarea
+                    className="min-h-24"
+                    value={
+                      content.education[0]
+                        ? `${content.education[0].school}|${content.education[0].degree ?? ""}|${content.education[0].year ?? ""}`
+                        : ""
+                    }
+                    onChange={(e) => {
+                      const [school = "", degree = "", year = ""] = e.target.value.split("|")
+                      setContent({
+                        ...content,
+                        education: school
+                          ? [{ school: school.trim(), degree: degree.trim(), year: year.trim() }]
+                          : [],
+                      })
+                    }}
+                    placeholder="Stanford University|B.S. Computer Science|2021"
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" onClick={runAts} disabled={atsRunning}>
-            {atsRunning ? "Scanning..." : "Run ATS scan"}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={generateWithAi}
-            disabled={generating}
-          >
-            {generating ? "Generating..." : "AI improve"}
-          </Button>
-          <Button type="button" onClick={save} disabled={saving}>
-            {saving ? "Saving..." : "Save"}
-          </Button>
+
+        <div className="lg:sticky lg:top-20 lg:self-start">
+          <Card className="border-border/80 shadow-sm">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Live preview</CardTitle>
+                <Badge variant="outline">ATS-ready</Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ResumePreview title={title} targetRole={targetRole} content={content} />
+            </CardContent>
+          </Card>
         </div>
-      </div>
-
-      {message ? (
-        <p
-          className={
-            isError
-              ? "rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-              : "rounded-lg border bg-muted/40 px-3 py-2 text-sm"
-          }
-        >
-          {message}
-        </p>
-      ) : null}
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="title">Title</Label>
-          <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="role">Target role</Label>
-          <Input
-            id="role"
-            value={targetRole}
-            onChange={(e) => setTargetRole(e.target.value)}
-          />
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="summary">Professional summary</Label>
-        <Textarea
-          id="summary"
-          value={content.summary ?? ""}
-          onChange={(e) => setContent({ ...content, summary: e.target.value })}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="skills">Skills (comma separated)</Label>
-        <Input
-          id="skills"
-          value={content.skills.join(", ")}
-          onChange={(e) =>
-            setContent({
-              ...content,
-              skills: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
-            })
-          }
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="experience">Experience bullets (one per line)</Label>
-        <Textarea
-          id="experience"
-          value={content.experience[0]?.bullets.join("\n") ?? ""}
-          onChange={(e) =>
-            setContent({
-              ...content,
-              experience: [
-                {
-                  company: content.experience[0]?.company ?? "Company",
-                  title: content.experience[0]?.title ?? (targetRole || "Role"),
-                  bullets: e.target.value.split("\n").filter(Boolean),
-                },
-              ],
-            })
-          }
-        />
       </div>
     </div>
   )

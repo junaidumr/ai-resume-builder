@@ -1,8 +1,4 @@
-import Link from "next/link"
-
-import { ResumeCardActions } from "@/components/resumes/resume-card-actions"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { ResumesWorkspace } from "@/components/resumes/resumes-workspace"
 import { requireUser } from "@/lib/auth/session"
 import { prisma } from "@/lib/db/prisma"
 
@@ -18,54 +14,15 @@ export default async function ResumesPage() {
   })
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-medium">Resume Builder</h1>
-          <p className="text-sm text-muted-foreground">
-            Create and manage AI-optimized resumes.
-          </p>
-        </div>
-        <Button asChild>
-          <Link href="/dashboard/resumes/new">New resume</Link>
-        </Button>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {resumes.length === 0 ? (
-          <Card className="md:col-span-2 xl:col-span-3">
-            <CardContent className="flex flex-col gap-3 p-6">
-              <p className="text-sm text-muted-foreground">
-                No resumes yet. Create your first resume to get started.
-              </p>
-              <Button asChild className="w-fit">
-                <Link href="/dashboard/resumes/new">Create resume</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          resumes.map((resume) => (
-            <Card key={resume.id}>
-              <CardHeader>
-                <CardTitle>{resume.title}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  {resume.targetRole ?? "No target role"}
-                </p>
-                <p className="text-sm">
-                  ATS {resume.versions[0]?.atsScore ?? 0}% · {resume._count.versions}{" "}
-                  versions
-                </p>
-                <Button asChild variant="outline" className="w-full">
-                  <Link href={`/dashboard/resumes/${resume.id}`}>Open editor</Link>
-                </Button>
-                <ResumeCardActions resumeId={resume.id} />
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
-    </div>
+    <ResumesWorkspace
+      resumes={resumes.map((r) => ({
+        id: r.id,
+        title: r.title,
+        targetRole: r.targetRole,
+        atsScore: r.versions[0]?.atsScore ?? 0,
+        versionCount: r._count.versions,
+        updatedAt: r.updatedAt.toISOString(),
+      }))}
+    />
   )
 }

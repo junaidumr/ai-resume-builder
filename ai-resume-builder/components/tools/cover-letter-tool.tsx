@@ -1,10 +1,13 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
+import { MailIcon } from "lucide-react"
 
 import { parseApiResponse } from "@/lib/api/parse-response"
+import { EmptyState } from "@/components/dashboard/empty-state"
+import { ToolWorkspace } from "@/components/dashboard/tool-workspace"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -34,11 +37,9 @@ export function CoverLetterTool({ resumes }: { resumes: ResumeOption[] }) {
       setError("Job description must be at least 20 characters.")
       return
     }
-
     setLoading(true)
     setError(null)
     setNotice(null)
-
     try {
       const res = await fetch("/api/cover-letter", {
         method: "POST",
@@ -62,85 +63,87 @@ export function CoverLetterTool({ resumes }: { resumes: ResumeOption[] }) {
         return
       }
       setLetter(parsed.data.letter)
-      if (parsed.data.usedFallback) {
-        setNotice("Used template generator (OpenAI unavailable).")
-      }
+      if (parsed.data.usedFallback) setNotice("Template letter (OpenAI unavailable).")
     } catch {
       setLoading(false)
-      setError("Cover letter generation failed.")
+      setError("Generation failed.")
     }
   }
 
   if (resumes.length === 0) {
     return (
-      <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
-        <h1 className="text-2xl font-medium">Cover Letter Generator</h1>
-        <p className="text-sm text-muted-foreground">
-          Create a resume first to generate tailored cover letters.
-        </p>
-        <Button asChild>
-          <Link href="/dashboard/resumes/new">Create resume</Link>
-        </Button>
+      <div className="p-6">
+        <EmptyState
+          icon={MailIcon}
+          title="No resumes"
+          description="Create a resume to generate tailored cover letters."
+          actionLabel="Create resume"
+          actionHref="/dashboard/resumes/new"
+        />
       </div>
     )
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-      <div>
-        <h1 className="text-2xl font-medium">Cover Letter Generator</h1>
-        <p className="text-sm text-muted-foreground">
-          Generate tailored cover letters with tone control.
-        </p>
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Resume</Label>
-            <Select value={resumeId} onChange={(e) => setResumeId(e.target.value)}>
-              {resumes.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.title}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Tone</Label>
-            <Select
-              value={tone}
-              onChange={(e) => setTone(e.target.value as (typeof tones)[number])}
-            >
-              {tones.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Job description</Label>
-            <Textarea
-              value={jobDescription}
-              onChange={(e) => setJobDescription(e.target.value)}
-              placeholder="Paste the job description (min. 20 characters)."
-            />
-          </div>
-          <Button type="button" onClick={generate} disabled={loading}>
-            {loading ? "Generating..." : "Generate cover letter"}
-          </Button>
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
-          {notice ? <p className="text-sm text-muted-foreground">{notice}</p> : null}
-        </div>
-        <div className="space-y-2">
-          <Label>Live preview</Label>
+    <ToolWorkspace
+      title="Cover Letter Generator"
+      description="Role-specific letters with tone control — professional, startup, corporate, or creative."
+      icon={MailIcon}
+      badge="Writer"
+      sidebar={
+        <Card className="border-border/80 shadow-sm">
+          <CardContent className="space-y-4 p-4 pt-4">
+            <div className="space-y-2">
+              <Label>Resume</Label>
+              <Select value={resumeId} onChange={(e) => setResumeId(e.target.value)}>
+                {resumes.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.title}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Tone</Label>
+              <Select
+                value={tone}
+                onChange={(e) => setTone(e.target.value as (typeof tones)[number])}
+              >
+                {tones.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Job description</Label>
+              <Textarea
+                className="min-h-32"
+                value={jobDescription}
+                onChange={(e) => setJobDescription(e.target.value)}
+              />
+            </div>
+            <Button type="button" className="w-full" onClick={generate} disabled={loading}>
+              {loading ? "Writing..." : "Generate letter"}
+            </Button>
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            {notice ? <p className="text-sm text-muted-foreground">{notice}</p> : null}
+          </CardContent>
+        </Card>
+      }
+    >
+      <Card className="h-full border-border/80 shadow-sm">
+        <CardContent className="p-4 pt-4">
+          <Label>Editor — copy and customize</Label>
           <Textarea
-            className="min-h-80"
+            className="mt-2 min-h-[420px] font-mono text-sm leading-relaxed"
             value={letter}
             onChange={(e) => setLetter(e.target.value)}
+            placeholder="Your cover letter will appear here..."
           />
-        </div>
-      </div>
-    </div>
+        </CardContent>
+      </Card>
+    </ToolWorkspace>
   )
 }

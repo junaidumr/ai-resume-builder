@@ -1,21 +1,20 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
+import { GaugeIcon } from "lucide-react"
 
 import { parseApiResponse } from "@/lib/api/parse-response"
+import { EmptyState } from "@/components/dashboard/empty-state"
+import { ToolWorkspace } from "@/components/dashboard/tool-workspace"
+import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { resumeToText, type ResumeContent } from "@/lib/types/resume"
 
-type ResumeOption = {
-  id: string
-  title: string
-  content: ResumeContent
-}
+type ResumeOption = { id: string; title: string; content: ResumeContent }
 
 export function JobMatchTool({ resumes }: { resumes: ResumeOption[] }) {
   const [resumeId, setResumeId] = React.useState(resumes[0]?.id ?? "")
@@ -41,11 +40,9 @@ export function JobMatchTool({ resumes }: { resumes: ResumeOption[] }) {
       setError("Job description must be at least 20 characters.")
       return
     }
-
     setLoading(true)
     setError(null)
     setNotice(null)
-
     try {
       const res = await fetch("/api/jobs/match", {
         method: "POST",
@@ -74,93 +71,106 @@ export function JobMatchTool({ resumes }: { resumes: ResumeOption[] }) {
         return
       }
       setResult(parsed.data.result)
-      if (parsed.data.usedFallback) {
-        setNotice("Used local keyword matching (OpenAI unavailable).")
-      }
+      if (parsed.data.usedFallback) setNotice("Local keyword match (OpenAI unavailable).")
     } catch {
       setLoading(false)
-      setError("Job match failed. Try again.")
+      setError("Job match failed.")
     }
   }
 
   if (resumes.length === 0) {
     return (
-      <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
-        <h1 className="text-2xl font-medium">Job Match Engine</h1>
-        <p className="text-sm text-muted-foreground">
-          Create a resume first to compare against job descriptions.
-        </p>
-        <Button asChild>
-          <Link href="/dashboard/resumes/new">Create resume</Link>
-        </Button>
+      <div className="p-6">
+        <EmptyState
+          icon={GaugeIcon}
+          title="No resumes"
+          description="Create a resume to compare against job descriptions."
+          actionLabel="Create resume"
+          actionHref="/dashboard/resumes/new"
+        />
       </div>
     )
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-      <div>
-        <h1 className="text-2xl font-medium">Job Match Engine</h1>
-        <p className="text-sm text-muted-foreground">
-          Compare your resume against a job description.
-        </p>
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Resume</Label>
-            <Select value={resumeId} onChange={(e) => setResumeId(e.target.value)}>
-              {resumes.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.title}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Job description</Label>
-            <Textarea
-              value={jobDescription}
-              onChange={(e) => setJobDescription(e.target.value)}
-              placeholder="Paste the full job description (min. 20 characters)."
-            />
-          </div>
-          <Button type="button" onClick={runMatch} disabled={loading || !resumeId}>
-            {loading ? "Matching..." : "Run job match"}
-          </Button>
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
-          {notice ? <p className="text-sm text-muted-foreground">{notice}</p> : null}
-        </div>
-        <Card>
-          <CardHeader>
-            <CardTitle>Match analysis</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-muted-foreground">
-            {!result ? (
-              <p>Results will appear here.</p>
-            ) : (
-              <>
-                <p className="text-3xl font-medium text-foreground">
-                  {result.matchPercentage}%
-                </p>
-                <p>
-                  <strong className="text-foreground">Missing:</strong>{" "}
-                  {result.missingKeywords.join(", ")}
-                </p>
-                <p>
-                  <strong className="text-foreground">Weak areas:</strong>{" "}
-                  {result.weakAreas.join(", ")}
-                </p>
-                <ul className="list-inside list-disc">
-                  {result.rewriteSuggestions.map((s) => (
-                    <li key={s}>{s}</li>
-                  ))}
-                </ul>
-              </>
-            )}
+    <ToolWorkspace
+      title="Job Match Engine"
+      description="Semantic alignment between your resume and a target job description."
+      icon={GaugeIcon}
+      badge="Match AI"
+      steps={[
+        { label: "Resume", done: !!resumeId },
+        { label: "Job description", done: jobDescription.length >= 20 },
+        { label: "Analyze", done: !!result },
+      ]}
+      sidebar={
+        <Card className="border-border/80 shadow-sm">
+          <CardContent className="space-y-4 p-4 pt-4">
+            <div className="space-y-2">
+              <Label>Resume</Label>
+              <Select value={resumeId} onChange={(e) => setResumeId(e.target.value)}>
+                {resumes.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.title}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Job description</Label>
+              <Textarea
+                className="min-h-40"
+                value={jobDescription}
+                onChange={(e) => setJobDescription(e.target.value)}
+                placeholder="Paste the full job posting..."
+              />
+            </div>
+            <Button type="button" className="w-full" onClick={runMatch} disabled={loading}>
+              {loading ? "Analyzing..." : "Run job match"}
+            </Button>
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            {notice ? <p className="text-sm text-muted-foreground">{notice}</p> : null}
           </CardContent>
         </Card>
-      </div>
-    </div>
+      }
+    >
+      <Card className="h-full border-border/80 shadow-sm">
+        <CardHeader>
+          <CardTitle>Match report</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {!result ? (
+            <p className="text-sm text-muted-foreground">Results appear after analysis.</p>
+          ) : (
+            <>
+              <div>
+                <div className="flex items-end justify-between">
+                  <span className="text-4xl font-semibold tabular-nums">
+                    {result.matchPercentage}%
+                  </span>
+                  <span className="text-sm text-muted-foreground">overall match</span>
+                </div>
+                <Progress value={result.matchPercentage} className="mt-3 h-2" />
+              </div>
+              <div className="rounded-lg border bg-muted/20 p-3 text-sm">
+                <p className="font-medium">Missing keywords</p>
+                <p className="mt-1 text-muted-foreground">{result.missingKeywords.join(", ")}</p>
+              </div>
+              <div className="rounded-lg border bg-muted/20 p-3 text-sm">
+                <p className="font-medium">Weak areas</p>
+                <p className="mt-1 text-muted-foreground">{result.weakAreas.join(", ")}</p>
+              </div>
+              <ul className="space-y-2 text-sm">
+                {result.rewriteSuggestions.map((s) => (
+                  <li key={s} className="rounded-lg border px-3 py-2">
+                    {s}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </ToolWorkspace>
   )
 }
